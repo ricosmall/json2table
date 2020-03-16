@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" href="assets/bootstrap.min.css">
+    <link rel="stylesheet" href="assets/prism-okaidia.min.css">
+    <title>JSON2TABLE</title>
+</head>
+
+<body class="font-weight-lighter">
+    <div class="jumbotron jumbotron-fluid">
+        <div class="container">
+            <h1 class="display-4">JSON2TABLE</h1>
+            <div class="text-muted">Transform JSON data to HTML table, and can be exported as xls file or image file.</div>
+        </div>
+    </div>
+    <div class="container">
+        <div class="text-right">
+            <button class="btn btn-secondary btn-sm" onclick="loadJSONExample(this)">Load a JSON data example</button>
+        </div>
+        <div class="row">
+            <label class="col-12">
+                <span>JSON data:</span>
+                <textarea class="form-control" name="data" id="data" rows="4"
+                placeholder="Must be array，like: [{a: { c: 1 }, b: 2}]"></textarea>
+            </label>
+        </div>
+        <div class="row">
+            <div class="col-12 pb-2">
+                <button class="btn btn-primary btn-sm" onclick="formatJSON()">Format JSON data</button>
+                <pre class="overflow-auto d-none" id="jsonWrap" style="height: 20em;"><code class="language-json" id="json"></code>
+</pre>
+            </div>
+        </div>
+        <div class="row">
+            <label class="col-lg-6">
+                <span>Extract key:</span>
+                <textarea class="form-control" name="rule" id="rule" rows="4"
+                    placeholder="Seperate by comma, or one name per line. like: a.c,b"></textarea>
+            </label>
+            <label class="col-lg-6">
+                <span>Define table head:</span>
+                <textarea class="form-control" name="thead" id="thead" rows="4"
+                    placeholder="Seperate by comma, or one name per line. like:"></textarea>
+            </label>
+        </div>
+        <div class="row">
+            <label class="col-12">
+                <span>Define method to extract key (optional):</span>
+                <textarea class="form-control" name="handle" id="handle" rows="4"
+                    placeholder="Params to method is an object, return value must be array. like: function (item) { return [item.a.c, item.b]"></textarea>
+            </label>
+        </div>
+        <div class="row pt-2 pb-4">
+            <div class="col">
+                <button class="btn btn-primary btn-block" id="btn" onclick="print()">Transform to Table</button>
+            </div>
+        </div>
+        <table class="table" id="table"></table>
+        <div id="exportWrap" class="row py-4 d-none">
+            <div class="col">
+                <button class="btn btn-primary btn-block" id="btn" onclick="exportToExcel()">Export XLS</button>
+            </div>
+            <div class="col">
+                <button class="btn btn-primary btn-block" id="btn" onclick="tableToImage()">Export Image</button>
+            </div>
+        </div>
+        <a id="export" href="javascript:;" class="d-none"></a>
+        <iframe id="canvasIframe" style="position: absolute;left: -10000px;" frameborder="0"></iframe>
+    </div>
+    <script>
+        function trim(str) {
+            return str.replace(/\s+/g, '');
+        }
+        function $(id) {
+            return document.getElementById(id);
+        }
+        var view = ['data', 'rule', 'jsonWrap', 'json', 'handle', 'table', 'thead', 'export', 'exportWrap', 'canvasIframe']
+            .reduce((result, key) => {
+                result[key] = $(key)
+                return result
+            }, {})
+        function createElement(type, innerHTML) {
+            var el = document.createElement(type);
+            el.innerHTML = innerHTML
+            document.body.appendChild(el)
+        }
+        function transformStr2Arr(str) {
+            return /,/.test(str)
+                ? trim(str).split(',')
+                : str.split('\n').map(
+                    function (item) {
+                        return trim(item)
+                    }
+                );
+        }
+        function print() {
+            var data = JSON.parse(trim(view.data.value));
+            var handle = view.handle.value;
+            if (handle) {
+                createElement('script', `window.definedFunc = ${handle}`);
+                printData(data, definedFunc);
+                return
+            }
+            var rule = transformStr2Arr(view.rule.value);
+            var ruleFunc = function (item) {
+                return rule.map(function (key) {
+                    if (/\./.test(key)) {
+                        var arr = key.split('.');
+                        var getResult = function (arr, obj) {
+                            if (arr.length === 1) {
+                                return obj[arr[0]];
+                            } else {
+                                obj = obj[arr.shift()];
+                                return getResult(arr, obj);
+                            }
+                        }
+                        return getResult(arr, item);
+                    }
+                    return item[key]
+                })
+            };
+            printData(data, ruleFunc);
+            // display export buttons
+            view.exportWrap.classList.remove('d-none');
+        }
+        function printData(data, handle) {
+            if (!Array.isArray(data)) {
+                throw new Error('JSON data must be array');
+            }
+            var result = data.reduce(function (prev, curr) {
+                prev += '<tr><td>' + handle(curr).join('</td><td>') + '</td></tr>';
+                return prev
+            }, '');
+            var thead = getThead();
+            view.table.innerHTML = '<thead class="thead-light">' + thead + '</thead><tbody>' + result + '</tbody>';
+        }
+        function getThead() {
+            var heads = transformStr2Arr(view.thead.value);
+            if (heads.every(item => !item)) heads = transformStr2Arr(view.rule.value)
+            return '<tr><th>' + heads.join('</th><th>') + '</th></tr>';
+        }
+        function formatJSON() {
+            if (view.jsonWrap.classList.contains('d-none')) {
+                view.jsonWrap.classList.remove('d-none');
+            }
+            var str = view.data.value;
+            var styleStr = '';
+            var parseErr = '';
+            try {
+                styleStr = JSON.stringify(JSON.parse(str), null, 2);
+            } catch (e) {
+                parseErr = e;
+            }
+            if (parseErr) {
+                view.json.innerHTML = parseErr;
+                return
+            }
+            view.json.innerHTML = styleStr;
+            view.data.value = styleStr;
+            Prism.highlightElement(view.json);
+        }
+        function exportToExcel() {
+            print();
+            // Get outerHTML of the table element, include <table></table>,
+            // then wrapped it with a whole HTML Document.
+            var html = '<html><head><meta charset="utf-8"/></head><body>' + view.table.outerHTML + '</body></html>';
+            // Create a Blob instance, first param is an array consisted of
+            // all content will exported, second param is object which include
+            // properties of the file, like `type`.
+            var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+            var a = view.export;
+            // Create a blob URL with method `URL.createObjectURL()`.
+            a.href = URL.createObjectURL(blob);
+            // Set file name
+            a.download = 'json2table.xls';
+            a.click();
+        }
+        function tableToImage() {
+            /**
+             * hack to solve problem of html2canvas 1.0.0-rc5
+             */
+            var table = view.table;
+            var iframe = view.canvasIframe;
+            const iframeDoc = iframe.contentDocument;
+            if (!iframeDoc.head.children.length) {
+                var link = document.createElement('link');
+                link.rel='stylesheet';
+                link.href='/assets/bootstrap.min.css';
+                iframe.contentDocument.head.appendChild(link);
+            }
+            var copyEl = table.cloneNode(true);
+            iframe.contentDocument.body.appendChild(copyEl);
+            iframe.contentDocument.body.classList.add('font-weight-lighter');
+            iframe.height = table.scrollHeight;
+            iframe.width = table.scrollWidth;
+            html2canvas(iframe.contentDocument.body).then(function (canvas) {
+                var data = canvas.toDataURL('image/png');
+                var link = document.createElement('a');
+                link.href = data;
+                link.download = 'json2table.png';
+                link.click();
+
+                iframe.contentDocument.body.removeChild(copyEl);
+            })
+        }
+        function loadJSONExample(btn) {
+            btn.classList.add('disabled');
+            var q = new URLSearchParams(location.search.slice(1)).get('q') || 'json2table';
+            var url = 'https://api.github.com/search/repositories?q=' + q + '&sort=stars&per_page=10';
+            fetch(url)
+                .then(response => response.json())
+                .then(json => {
+                    btn.classList.remove('disabled');
+                    var items = json.items;
+                    console.log(items);
+                    view.data.value = JSON.stringify(items);
+                    view.rule.value = 'name\nowner.login\nstargazers_count\nforks_count\nwatchers_count\nlanguage';
+                    view.thead.value = 'Name\nAuthor\nStars\nForks\nWatchers\nLanguage';
+                    print();
+                })
+        }
+    </script>
+    <script src="assets/prism.min.js"></script>
+    <script src="assets/prism-json.min.js"></script>
+    <script src="assets/html2canvas.min.js"></script>
+</body>
+
+</html>
