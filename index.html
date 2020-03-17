@@ -225,7 +225,6 @@
                     view.loadExampleBtn.classList.remove('disabled');
                     view.loadExampleBtn.firstElementChild.classList.add('d-none');
                     var items = json.items;
-                    console.log(items);
                     view.data.value = JSON.stringify(items);
                     view.rule.value = 'name\nowner.login\nstargazers_count\nforks_count\nwatchers_count\nlanguage';
                     view.thead.value = 'Name\nAuthor\nStars\nForks\nWatchers\nLanguage';
