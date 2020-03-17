@@ -231,6 +231,11 @@
                     print();
                 })
         }
+        window.onload = function onLoad() {
+            var params = new URLSearchParams(location.search.slice(1));
+            var hasQuery = params.has('q');
+            if (hasQuery) loadJSONExample();
+        }
     </script>
     <script src="assets/prism.min.js"></script>
     <script src="assets/prism-json.min.js"></script>
