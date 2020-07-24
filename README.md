@@ -1,6 +1,6 @@
 # json2table
 
-A useful tool to trans JSON data to HTML table, make your data look clear.
+A useful tool to transform JSON data to HTML table, make your data look clear.
 
 ## Usage
 
